@@ -100,15 +100,19 @@ public class SwiftBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationM
     ) {
         switch status {
         case .authorizedAlways:
+            print("")
             // Start location updates if not already running
         case .authorizedWhenInUse:
+            print("")
             // Optionally, start location updates with limitations
         case .denied, .restricted:
+            print("")
             // Handle denied access appropriately
         case .notDetermined:
             // Request permission if needed
             manager.requestAlwaysAuthorization()
         @unknown default:
+            print("")
             // Handle future cases
             break
         }
