@@ -99,6 +99,15 @@ class MBBackgroundLocation {
       }
     });
   }
+
+  static onLocationError(Function(String) error) {
+    _channel.setMethodCallHandler((MethodCall methodCall) async {
+      if (methodCall.method == 'location_error') {
+        var errorData = Map.from(methodCall.arguments);
+        error(errorData['message']);
+      }
+    });
+  }
 }
 
 /// about the user current location
