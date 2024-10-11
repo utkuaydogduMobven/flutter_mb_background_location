@@ -44,29 +44,27 @@ public class SwiftBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationM
 
             let args = call.arguments as? [String: Any]
             let distanceFilter = args?["distance_filter"] as? Double
-            let priority = args?["priority"] as? Int
+            let priority = args?["accuracy"] as? Int
 
             SwiftBackgroundLocationPlugin.locationManager?.distanceFilter = distanceFilter ?? 0
-
-            if priority == 0 {
-                SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy =
-                    kCLLocationAccuracyBest
-            }
-            if priority == 1 {
-                SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy =
-                    kCLLocationAccuracyNearestTenMeters
-            }
-            if priority == 2 {
-                SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy =
-                    kCLLocationAccuracyHundredMeters
-            }
-            if priority == 3 {
-                if #available(iOS 14.0, *) {
-                    SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy =
-                        kCLLocationAccuracyReduced
-                } else {
-                    // Fallback on earlier versions
-                }
+            
+            switch priority {
+            case 0:
+                SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = kCLLocationAccuracyBest
+            case 1:
+                SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+            case 2:
+                SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+            case 3:
+                SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = kCLLocationAccuracyHundredMeters
+            case 4:
+                SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = kCLLocationAccuracyKilometer
+            case 5:
+                SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = kCLLocationAccuracyThreeKilometers
+            case 6:
+                SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = kCLLocationAccuracyReduced
+            default:
+                SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = kCLLocationAccuracyHundredMeters
             }
 
             SwiftBackgroundLocationPlugin.locationManager?.startUpdatingLocation()
@@ -83,13 +81,27 @@ public class SwiftBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationM
             result(true)
         }
     }
-
-    public func locationManager(
-        _ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus
-    ) {
-        if status == .authorizedAlways {
-
+    
+    public func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        switch status {
+        case .authorizedAlways:
+            // Start location updates if not already running
+        case .authorizedWhenInUse:
+            // Optionally, start location updates with limitations
+        case .denied, .restricted:
+            // Handle denied access appropriately
+        case .notDetermined:
+            // Request permission if needed
+            manager.requestAlwaysAuthorization()
+        @unknown default:
+            // Handle future cases
+            break
         }
+    }
+    
+    public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        // Handle error appropriately
+        SwiftBackgroundLocationPlugin.channel?.invokeMethod("location_error", arguments: error.localizedDescription)
     }
 
     public func locationManager(
