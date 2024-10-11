@@ -32,8 +32,12 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
                     .showsBackgroundLocationIndicator =
                     true
             }
+            // setted to true for battery saving.
             FlutterMbBackgroundLocationPlugin.locationManager?.pausesLocationUpdatesAutomatically =
-                false
+                true
+            // setted for test
+            FlutterMbBackgroundLocationPlugin.locationManager?.activityType = .fitness
+
         }
     }
 
@@ -48,8 +52,8 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
             let args = call.arguments as? [String: Any]
             let distanceFilter = args?["distance_filter"] as? Double
             let priority = args?["accuracy"] as? Int
-
-            FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter = distanceFilter ?? 0
+            // disabled for significant location changes (recommended)
+            //FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter = distanceFilter ?? 0
 
             switch priority {
             case 0:
@@ -82,8 +86,9 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
                 FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy =
                     kCLLocationAccuracyHundredMeters
             }
-
-            FlutterMbBackgroundLocationPlugin.locationManager?.startUpdatingLocation()
+            //FlutterMbBackgroundLocationPlugin.locationManager?.startUpdatingLocation()
+            FlutterMbBackgroundLocationPlugin.locationManager?
+                .startMonitoringSignificantLocationChanges()
             running = true
             result(true)
         } else if call.method == "is_service_running" {
@@ -93,7 +98,9 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
             running = false
             FlutterMbBackgroundLocationPlugin.channel?.invokeMethod(
                 "location", arguments: "stop_location_service")
-            FlutterMbBackgroundLocationPlugin.locationManager?.stopUpdatingLocation()
+            //FlutterMbBackgroundLocationPlugin.locationManager?.stopUpdatingLocation()
+            FlutterMbBackgroundLocationPlugin.locationManager?
+                .stopMonitoringSignificantLocationChanges()
             result(true)
         }
     }
