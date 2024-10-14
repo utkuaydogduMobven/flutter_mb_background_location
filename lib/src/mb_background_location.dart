@@ -39,8 +39,8 @@ class MBBackgroundLocation {
         .invokeMethod('start_location_service', <String, dynamic>{
       'stationary_distance_filter': stationaryDistanceFilter,
       'force_location_manager': forceAndroidLocationManager,
-      "stationary_accuracy": stationaryAccuracy,
-      "moving_accuracy": movingAccuracy,
+      "stationary_accuracy": stationaryAccuracy.index,
+      "moving_accuracy": movingAccuracy.index,
       "stationary_check_second": stationaryCheckSecond,
       "moving_distance_filter": movingDistanceFilter,
       "moving_check_second": movingCheckSecond,
