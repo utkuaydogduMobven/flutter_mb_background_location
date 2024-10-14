@@ -26,17 +26,32 @@ class MBBackgroundLocation {
 
   /// Start receiving location updated
   static startLocationService({
-    double distanceFilter = 0.0,
+    double stationaryDistanceFilter = 150,
+    double movingDistanceFilter = 20,
+    int stationaryCheckSecond = 120,
+    int movingCheckSecond = 7,
     bool forceAndroidLocationManager = false,
-    MBLocationAccuracy accuracy = MBLocationAccuracy.nearestHundredMeters,
+    MBLocationAccuracy stationaryAccuracy =
+        MBLocationAccuracy.nearestHundredMeters,
+    MBLocationAccuracy movingAccuracy = MBLocationAccuracy.nearestTenMeters,
   }) async {
     return await _channel
         .invokeMethod('start_location_service', <String, dynamic>{
-      'distance_filter': distanceFilter,
+      'stationary_distance_filter': stationaryDistanceFilter,
       'force_location_manager': forceAndroidLocationManager,
-      "accuracy": accuracy.value
+      "stationary_accuracy": stationaryAccuracy,
+      "moving_accuracy": movingAccuracy,
+      "stationary_check_second": stationaryCheckSecond,
+      "moving_distance_filter": movingDistanceFilter,
+      "moving_check_second": movingCheckSecond,
     });
   }
+
+  /* 
+    var stationaryCheckSecond: Int = 120
+    var movingDistanceFilter: Double = 20.0
+    var movingCheckSecond: Int = 7
+   */
 
   static setAndroidNotification(
       {String? title, String? message, String? icon}) async {
