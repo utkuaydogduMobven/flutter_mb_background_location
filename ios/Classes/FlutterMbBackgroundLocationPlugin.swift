@@ -1,89 +1,57 @@
 import CoreLocation
 import Flutter
 import UIKit
+import CoreMotion
 
-public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate {
+public class SwiftBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate {
     static var locationManager: CLLocationManager?
     static var channel: FlutterMethodChannel?
     var running = false
 
-    public static func register(with registrar: FlutterPluginRegistrar) {
-        let instance = FlutterMbBackgroundLocationPlugin()
+    // Properties from ContentViewModel
+    private let motionActivityManager = CMMotionActivityManager()
+    private var motionStateCheckTimer: Timer?
+    private var currentActivity: CMMotionActivity?
 
-        FlutterMbBackgroundLocationPlugin.channel = FlutterMethodChannel(
+    public static func register(with registrar: FlutterPluginRegistrar) {
+        let instance = SwiftBackgroundLocationPlugin()
+
+        SwiftBackgroundLocationPlugin.channel = FlutterMethodChannel(
             name: "com.mobven.background_location/methods",
             binaryMessenger: registrar.messenger())
-        registrar.addMethodCallDelegate(
-            instance, channel: FlutterMbBackgroundLocationPlugin.channel!)
-        FlutterMbBackgroundLocationPlugin.channel?.setMethodCallHandler(instance.handle)
+        registrar.addMethodCallDelegate(instance, channel: SwiftBackgroundLocationPlugin.channel!)
+        SwiftBackgroundLocationPlugin.channel?.setMethodCallHandler(instance.handle)
         instance.running = false
     }
 
     private func initLocationManager() {
-        if FlutterMbBackgroundLocationPlugin.locationManager == nil {
-            FlutterMbBackgroundLocationPlugin.locationManager = CLLocationManager()
-            FlutterMbBackgroundLocationPlugin.locationManager?.delegate = self
-            FlutterMbBackgroundLocationPlugin.locationManager?.requestAlwaysAuthorization()
+        if SwiftBackgroundLocationPlugin.locationManager == nil {
+            SwiftBackgroundLocationPlugin.locationManager = CLLocationManager()
+            SwiftBackgroundLocationPlugin.locationManager?.delegate = self
+            SwiftBackgroundLocationPlugin.locationManager?.requestAlwaysAuthorization()
 
-            FlutterMbBackgroundLocationPlugin.locationManager?.allowsBackgroundLocationUpdates =
-                true
-            if #available(iOS 11.0, *) {
-                FlutterMbBackgroundLocationPlugin.locationManager?
-                    .showsBackgroundLocationIndicator =
-                    true
-            }
-            FlutterMbBackgroundLocationPlugin.locationManager?.pausesLocationUpdatesAutomatically =
-                false
+            SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = kCLLocationAccuracyHundredMeters
+            SwiftBackgroundLocationPlugin.locationManager?.distanceFilter = 100
+            SwiftBackgroundLocationPlugin.locationManager?.allowsBackgroundLocationUpdates = true
+            SwiftBackgroundLocationPlugin.locationManager?.showsBackgroundLocationIndicator = false
+            SwiftBackgroundLocationPlugin.locationManager?.pausesLocationUpdatesAutomatically = false
         }
     }
 
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        FlutterMbBackgroundLocationPlugin.channel?.invokeMethod("location", arguments: "method")
+        SwiftBackgroundLocationPlugin.channel?.invokeMethod("location", arguments: "method")
 
         if call.method == "start_location_service" {
             initLocationManager()
-            FlutterMbBackgroundLocationPlugin.channel?.invokeMethod(
+            SwiftBackgroundLocationPlugin.channel?.invokeMethod(
                 "location", arguments: "start_location_service")
 
-            let args = call.arguments as? [String: Any]
-            let distanceFilter = args?["distance_filter"] as? Double
-            let priority = args?["accuracy"] as? Int
+            SwiftBackgroundLocationPlugin.locationManager?.distanceFilter = 100
+            SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy =
+                kCLLocationAccuracyHundredMeters
 
-            FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter = distanceFilter ?? 0
-
-            switch priority {
-            case 0:
-                FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy =
-                    kCLLocationAccuracyBest
-            case 1:
-                FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy =
-                    kCLLocationAccuracyBestForNavigation
-            case 2:
-                FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy =
-                    kCLLocationAccuracyNearestTenMeters
-            case 3:
-                FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy =
-                    kCLLocationAccuracyHundredMeters
-            case 4:
-                FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy =
-                    kCLLocationAccuracyKilometer
-            case 5:
-                FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy =
-                    kCLLocationAccuracyThreeKilometers
-            case 6:
-                if #available(iOS 14.0, *) {
-                    FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy =
-                        kCLLocationAccuracyReduced
-                } else {
-                    FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy =
-                        kCLLocationAccuracyHundredMeters
-                }
-            default:
-                FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy =
-                    kCLLocationAccuracyHundredMeters
-            }
-
-            FlutterMbBackgroundLocationPlugin.locationManager?.startUpdatingLocation()
+            SwiftBackgroundLocationPlugin.locationManager?.startUpdatingLocation()
+            startMonitoringMotionActivity()
             running = true
             result(true)
         } else if call.method == "is_service_running" {
@@ -91,10 +59,52 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
         } else if call.method == "stop_location_service" {
             initLocationManager()
             running = false
-            FlutterMbBackgroundLocationPlugin.channel?.invokeMethod(
+            SwiftBackgroundLocationPlugin.channel?.invokeMethod(
                 "location", arguments: "stop_location_service")
-            FlutterMbBackgroundLocationPlugin.locationManager?.stopUpdatingLocation()
+            SwiftBackgroundLocationPlugin.locationManager?.stopUpdatingLocation()
+            motionStateCheckTimer?.invalidate()
+            motionActivityManager.stopActivityUpdates()
             result(true)
+        }
+    }
+
+    private func startMonitoringMotionActivity() {
+        if CMMotionActivityManager.isActivityAvailable() {
+            motionActivityManager.startActivityUpdates(to: OperationQueue.main) { [weak self] activity in
+                guard let self = self else { return }
+                self.currentActivity = activity
+            }
+            startMotionStateCheckTimer()
+        } else {
+            print("Motion activity is not available.")
+        }
+    }
+
+    private func startMotionStateCheckTimer() {
+        motionStateCheckTimer = Timer.scheduledTimer(
+            timeInterval: 7,
+            target: self,
+            selector: #selector(checkMotionState),
+            userInfo: nil,
+            repeats: true)
+    }
+
+    @objc private func checkMotionState() {
+        guard let activity = currentActivity else {
+            // No activity data, default to 100 meters
+            SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = kCLLocationAccuracyHundredMeters
+            SwiftBackgroundLocationPlugin.locationManager?.distanceFilter = 100
+            print("No activity data, distanceFilter set to 100 meters.")
+            return
+        }
+        if activity.stationary { // telefon sabit
+            SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = kCLLocationAccuracyHundredMeters
+            SwiftBackgroundLocationPlugin.locationManager?.distanceFilter = 100
+            print("User is stationary, distanceFilter set to 100 meters.")
+        } else {
+            SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+            SwiftBackgroundLocationPlugin.locationManager?.distanceFilter = 12
+            print("User is moving, distanceFilter set to 12 meters.")
         }
     }
 
@@ -103,45 +113,43 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
     ) {
         switch status {
         case .authorizedAlways:
-            print("")
-        // Start location updates if not already running
+            // Start location updates if not already running
+            print("Authorized for always access.")
         case .authorizedWhenInUse:
-            print("")
-        // Optionally, start location updates with limitations
+            print("Authorized when in use.")
         case .denied, .restricted:
-            print("")
-        // Handle denied access appropriately
+            print("Location access denied or restricted.")
         case .notDetermined:
-            // Request permission if needed
             manager.requestAlwaysAuthorization()
         @unknown default:
-            print("")
-            // Handle future cases
-            break
+            print("Unknown authorization status.")
         }
     }
 
     public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         // Handle error appropriately
-        FlutterMbBackgroundLocationPlugin.channel?.invokeMethod(
+        SwiftBackgroundLocationPlugin.channel?.invokeMethod(
             "location_error", arguments: error.localizedDescription)
     }
 
     public func locationManager(
         _ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]
     ) {
-        let location =
+        guard let location = locations.last else { return }
+
+        let locationData =
             [
-                "speed": locations.last!.speed,
-                "altitude": locations.last!.altitude,
-                "latitude": locations.last!.coordinate.latitude,
-                "longitude": locations.last!.coordinate.longitude,
-                "accuracy": locations.last!.horizontalAccuracy,
-                "bearing": locations.last!.course,
-                "time": locations.last!.timestamp.timeIntervalSince1970 * 1000,
+                "speed": location.speed,
+                "altitude": location.altitude,
+                "latitude": location.coordinate.latitude,
+                "longitude": location.coordinate.longitude,
+                "accuracy": location.horizontalAccuracy,
+                "bearing": location.course,
+                "time": location.timestamp.timeIntervalSince1970 * 1000,
                 "is_mock": false,
             ] as [String: Any]
 
-        FlutterMbBackgroundLocationPlugin.channel?.invokeMethod("location", arguments: location)
+        SwiftBackgroundLocationPlugin.channel?.invokeMethod("location", arguments: locationData)
+        print("Location updated: \(location.coordinate.latitude), \(location.coordinate.longitude)")
     }
 }
