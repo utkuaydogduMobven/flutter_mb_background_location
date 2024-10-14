@@ -3,7 +3,7 @@ import CoreMotion
 import Flutter
 import UIKit
 
-public class SwiftBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate {
+public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate {
     static var locationManager: CLLocationManager?
     static var channel: FlutterMethodChannel?
     var running = false
@@ -21,52 +21,61 @@ public class SwiftBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationM
     var movingCheckSecond: Int = 7
 
     public static func register(with registrar: FlutterPluginRegistrar) {
-        let instance = SwiftBackgroundLocationPlugin()
+        let instance = FlutterMbBackgroundLocationPlugin()
 
-        SwiftBackgroundLocationPlugin.channel = FlutterMethodChannel(
+        FlutterMbBackgroundLocationPlugin.channel = FlutterMethodChannel(
             name: "com.mobven.background_location/methods",
             binaryMessenger: registrar.messenger())
-        registrar.addMethodCallDelegate(instance, channel: SwiftBackgroundLocationPlugin.channel!)
-        SwiftBackgroundLocationPlugin.channel?.setMethodCallHandler(instance.handle)
+        registrar.addMethodCallDelegate(
+            instance, channel: FlutterMbBackgroundLocationPlugin.channel!)
+        FlutterMbBackgroundLocationPlugin.channel?.setMethodCallHandler(instance.handle)
         instance.running = false
     }
 
     private func initLocationManager() {
-        if SwiftBackgroundLocationPlugin.locationManager == nil {
-            SwiftBackgroundLocationPlugin.locationManager = CLLocationManager()
-            SwiftBackgroundLocationPlugin.locationManager?.delegate = self
-            SwiftBackgroundLocationPlugin.locationManager?.requestAlwaysAuthorization()
+        if FlutterMbBackgroundLocationPlugin.locationManager == nil {
+            FlutterMbBackgroundLocationPlugin.locationManager = CLLocationManager()
+            FlutterMbBackgroundLocationPlugin.locationManager?.delegate = self
+            FlutterMbBackgroundLocationPlugin.locationManager?.requestAlwaysAuthorization()
 
-            SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = stationaryAccuracy
-            SwiftBackgroundLocationPlugin.locationManager?.distanceFilter = stationaryDistanceFilter
-            SwiftBackgroundLocationPlugin.locationManager?.allowsBackgroundLocationUpdates = true
-            SwiftBackgroundLocationPlugin.locationManager?.showsBackgroundLocationIndicator = false
-            SwiftBackgroundLocationPlugin.locationManager?.pausesLocationUpdatesAutomatically =
+            FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy = decideAccuracy(
+                stationaryAccuracy)
+            FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter =
+                stationaryDistanceFilter
+            FlutterMbBackgroundLocationPlugin.locationManager?.allowsBackgroundLocationUpdates =
+                true
+            FlutterMbBackgroundLocationPlugin.locationManager?.showsBackgroundLocationIndicator =
+                false
+            FlutterMbBackgroundLocationPlugin.locationManager?.pausesLocationUpdatesAutomatically =
                 false
         }
     }
 
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        SwiftBackgroundLocationPlugin.channel?.invokeMethod("location", arguments: "method")
+        FlutterMbBackgroundLocationPlugin.channel?.invokeMethod("location", arguments: "method")
 
         if call.method == "start_location_service" {
             let args = call.arguments as? [String: Any]
 
-            stationaryDistanceFilter = args?["stationary_distance_filter"] as? Double
-            stationaryAccuracy = args?["stationary_accuracy"] as? Int
-            movingAccuracy = args?["moving_accuracy"] as? Int
-            stationaryCheckSecond = args?["stationary_check_second"] as? Int
-            movingDistanceFilter = args?["moving_distance_filter"] as? Double
-            movingCheckSecond = args?["moving_check_second"] as? Int
+            stationaryDistanceFilter =
+                args?["stationary_distance_filter"] as? Double ?? stationaryDistanceFilter
+            stationaryAccuracy = args?["stationary_accuracy"] as? Int ?? stationaryAccuracy
+            movingAccuracy = args?["moving_accuracy"] as? Int ?? movingAccuracy
+            stationaryCheckSecond =
+                args?["stationary_check_second"] as? Int ?? stationaryCheckSecond
+            movingDistanceFilter =
+                args?["moving_distance_filter"] as? Double ?? movingDistanceFilter
+            movingCheckSecond = args?["moving_check_second"] as? Int ?? movingCheckSecond
 
             initLocationManager()
-            SwiftBackgroundLocationPlugin.channel?.invokeMethod(
+            FlutterMbBackgroundLocationPlugin.channel?.invokeMethod(
                 "location", arguments: "start_location_service")
 
-            SwiftBackgroundLocationPlugin.locationManager?.distanceFilter = stationaryDistanceFilter
-            SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = stationaryAccuracy
+            FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter =
+                stationaryDistanceFilter
+            FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy = stationaryAccuracy
 
-            SwiftBackgroundLocationPlugin.locationManager?.startUpdatingLocation()
+            FlutterMbBackgroundLocationPlugin.locationManager?.startUpdatingLocation()
             startMonitoringMotionActivity()
             running = true
             result(true)
@@ -75,9 +84,9 @@ public class SwiftBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationM
         } else if call.method == "stop_location_service" {
             initLocationManager()
             running = false
-            SwiftBackgroundLocationPlugin.channel?.invokeMethod(
+            FlutterMbBackgroundLocationPlugin.channel?.invokeMethod(
                 "location", arguments: "stop_location_service")
-            SwiftBackgroundLocationPlugin.locationManager?.stopUpdatingLocation()
+            FlutterMbBackgroundLocationPlugin.locationManager?.stopUpdatingLocation()
             motionStateCheckTimer?.invalidate()
             motionActivityManager.stopActivityUpdates()
             result(true)
@@ -98,7 +107,7 @@ public class SwiftBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationM
     }
 
     private func startMotionStateCheckTimer() {
-        Dispatchqueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let self else { return }
             self.checkMotionState()
         }
@@ -107,30 +116,32 @@ public class SwiftBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationM
     @objc private func checkMotionState() {
         guard let activity = currentActivity else {
             // No activity data, default to 100 meters
-            SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = decideAccuracy(
+            FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy = decideAccuracy(
                 stationaryAccuracy)
-            SwiftBackgroundLocationPlugin.locationManager?.distanceFilter = stationaryDistanceFilter
+            FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter =
+                stationaryDistanceFilter
             print("LOG: No activity data, distanceFilter set to stationaryDistanceFilter meters.")
             return
         }
         if activity.stationary {  // telefon sabit
-            SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = decideAccuracy(
+            FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy = decideAccuracy(
                 stationaryAccuracy)
-            SwiftBackgroundLocationPlugin.locationManager?.distanceFilter = stationaryDistanceFilter
+            FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter =
+                stationaryDistanceFilter
             print("LOG: User is stationary, distanceFilter set to stationaryDistanceFilter meters.")
         } else {
-            SwiftBackgroundLocationPlugin.locationManager?.desiredAccuracy = decideAccuracy(
+            FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy = decideAccuracy(
                 movingAccuracy)
-            SwiftBackgroundLocationPlugin.locationManager?.distanceFilter = movingDistanceFilter
+            FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter = movingDistanceFilter
             print("LOG: User is moving, distanceFilter set to movingDistanceFilter meters.")
         }
 
         // Schedule the next check based on current activity
         let interval: TimeInterval
         if let activity = currentActivity, activity.stationary {
-            interval = stationaryCheckSecond
+            interval = Double(stationaryCheckSecond)
         } else {
-            interval = movingCheckSecond
+            interval = Double(movingCheckSecond)
         }
 
         // Invalidate any existing timer before scheduling a new one
@@ -188,7 +199,7 @@ public class SwiftBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationM
 
     public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         // Handle error appropriately
-        SwiftBackgroundLocationPlugin.channel?.invokeMethod(
+        FlutterMbBackgroundLocationPlugin.channel?.invokeMethod(
             "location_error", arguments: error.localizedDescription)
     }
 
@@ -209,7 +220,7 @@ public class SwiftBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocationM
                 "is_mock": false,
             ] as [String: Any]
 
-        SwiftBackgroundLocationPlugin.channel?.invokeMethod("location", arguments: locationData)
+        FlutterMbBackgroundLocationPlugin.channel?.invokeMethod("location", arguments: locationData)
         print(
             "LOG: Location updated: \(location.coordinate.latitude), \(location.coordinate.longitude)"
         )
