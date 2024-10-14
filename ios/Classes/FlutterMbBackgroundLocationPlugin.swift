@@ -73,7 +73,8 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
 
             FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter =
                 stationaryDistanceFilter
-            FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy = stationaryAccuracy
+            FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy = decideAccuracy(
+                stationaryAccuracy)
 
             FlutterMbBackgroundLocationPlugin.locationManager?.startUpdatingLocation()
             startMonitoringMotionActivity()
