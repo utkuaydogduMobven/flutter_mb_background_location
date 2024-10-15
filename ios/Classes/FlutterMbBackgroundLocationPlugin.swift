@@ -7,22 +7,22 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
     static var locationManager: CLLocationManager?
     static var channel: FlutterMethodChannel?
     var running = false
-
+    
     // Properties from ContentViewModel
     private let motionActivityManager = CMMotionActivityManager()
     private var motionStateCheckTimer: Timer?
     private var currentActivity: CMMotionActivity?
-
+    
     var stationaryDistanceFilter: Double = 150.0
     var stationaryAccuracy: Int = 3
     var stationaryCheckSecond: Int = 120
     var movingDistanceFilter: Double = 20.0
     var movingAccuracy: Int = 2
     var movingCheckSecond: Int = 7
-
+    
     public static func register(with registrar: FlutterPluginRegistrar) {
         let instance = FlutterMbBackgroundLocationPlugin()
-
+        
         FlutterMbBackgroundLocationPlugin.channel = FlutterMethodChannel(
             name: "com.mobven.background_location/methods",
             binaryMessenger: registrar.messenger())
@@ -31,51 +31,70 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
         FlutterMbBackgroundLocationPlugin.channel?.setMethodCallHandler(instance.handle)
         instance.running = false
     }
-
+    
     private func initLocationManager() {
         if FlutterMbBackgroundLocationPlugin.locationManager == nil {
             FlutterMbBackgroundLocationPlugin.locationManager = CLLocationManager()
             FlutterMbBackgroundLocationPlugin.locationManager?.delegate = self
             FlutterMbBackgroundLocationPlugin.locationManager?.requestAlwaysAuthorization()
-
+            
             FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy = decideAccuracy(
                 stationaryAccuracy)
             FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter =
-                stationaryDistanceFilter
+            stationaryDistanceFilter
             FlutterMbBackgroundLocationPlugin.locationManager?.allowsBackgroundLocationUpdates =
-                true
+            true
             FlutterMbBackgroundLocationPlugin.locationManager?.showsBackgroundLocationIndicator =
-                false
+            false
             FlutterMbBackgroundLocationPlugin.locationManager?.pausesLocationUpdatesAutomatically =
-                false
+            false
         }
     }
-
+    
+    private func requestMotionActivityPermission() {
+        if CMMotionActivityManager.isActivityAvailable() {
+            motionActivityManager.startActivityUpdates(to: OperationQueue.main) { activity in
+                self.currentActivity = activity
+                if let activity = activity {
+                    if activity.walking {
+                        print("User is walking.")
+                    } else if activity.running {
+                        print("User is running.")
+                    } else if activity.stationary {
+                        print("User is stationary.")
+                    }
+                }
+            }
+        } else {
+            print("Motion activity is not available on this device.")
+        }
+    }
+    
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         FlutterMbBackgroundLocationPlugin.channel?.invokeMethod("location", arguments: "method")
-
+        
         if call.method == "start_location_service" {
             let args = call.arguments as? [String: Any]
-
+            
             stationaryDistanceFilter =
-                args?["stationary_distance_filter"] as? Double ?? stationaryDistanceFilter
+            args?["stationary_distance_filter"] as? Double ?? stationaryDistanceFilter
             stationaryAccuracy = args?["stationary_accuracy"] as? Int ?? stationaryAccuracy
             movingAccuracy = args?["moving_accuracy"] as? Int ?? movingAccuracy
             stationaryCheckSecond =
-                args?["stationary_check_second"] as? Int ?? stationaryCheckSecond
+            args?["stationary_check_second"] as? Int ?? stationaryCheckSecond
             movingDistanceFilter =
-                args?["moving_distance_filter"] as? Double ?? movingDistanceFilter
+            args?["moving_distance_filter"] as? Double ?? movingDistanceFilter
             movingCheckSecond = args?["moving_check_second"] as? Int ?? movingCheckSecond
-
+            
             initLocationManager()
             FlutterMbBackgroundLocationPlugin.channel?.invokeMethod(
                 "location", arguments: "start_location_service")
-
+            
             FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter =
-                stationaryDistanceFilter
+            stationaryDistanceFilter
             FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy = decideAccuracy(
                 stationaryAccuracy)
-
+            
             FlutterMbBackgroundLocationPlugin.locationManager?.startUpdatingLocation()
             startMonitoringMotionActivity()
             running = true
@@ -91,9 +110,11 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
             motionStateCheckTimer?.invalidate()
             motionActivityManager.stopActivityUpdates()
             result(true)
+        } else if call.method == "request_motion_permission" {
+            requestMotionActivityPermission()
         }
     }
-
+    
     private func startMonitoringMotionActivity() {
         if CMMotionActivityManager.isActivityAvailable() {
             motionActivityManager.startActivityUpdates(to: OperationQueue.main) {
@@ -106,21 +127,21 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
             print("Motion activity is not available.")
         }
     }
-
+    
     private func startMotionStateCheckTimer() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let self else { return }
             self.checkMotionState()
         }
     }
-
+    
     @objc private func checkMotionState() {
         guard let activity = currentActivity else {
             // No activity data, default to 100 meters
             FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy = decideAccuracy(
                 stationaryAccuracy)
             FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter =
-                stationaryDistanceFilter
+            stationaryDistanceFilter
             print("LOG: No activity data, distanceFilter set to stationaryDistanceFilter meters.")
             return
         }
@@ -128,7 +149,7 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
             FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy = decideAccuracy(
                 stationaryAccuracy)
             FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter =
-                stationaryDistanceFilter
+            stationaryDistanceFilter
             print("LOG: User is stationary, distanceFilter set to stationaryDistanceFilter meters.")
         } else {
             FlutterMbBackgroundLocationPlugin.locationManager?.desiredAccuracy = decideAccuracy(
@@ -136,7 +157,7 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
             FlutterMbBackgroundLocationPlugin.locationManager?.distanceFilter = movingDistanceFilter
             print("LOG: User is moving, distanceFilter set to movingDistanceFilter meters.")
         }
-
+        
         // Schedule the next check based on current activity
         let interval: TimeInterval
         if let activity = currentActivity, activity.stationary {
@@ -144,7 +165,7 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
         } else {
             interval = Double(movingCheckSecond)
         }
-
+        
         // Invalidate any existing timer before scheduling a new one
         motionStateCheckTimer?.invalidate()
         motionStateCheckTimer = Timer.scheduledTimer(
@@ -154,7 +175,7 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
             userInfo: nil,
             repeats: false)
     }
-
+    
     func decideAccuracy(_ priority: Int) -> CLLocationAccuracy {
         switch priority {
         case 0:
@@ -179,7 +200,7 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
             return kCLLocationAccuracyHundredMeters
         }
     }
-
+    
     public func locationManager(
         _ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus
     ) {
@@ -197,30 +218,30 @@ public class FlutterMbBackgroundLocationPlugin: NSObject, FlutterPlugin, CLLocat
             print("Unknown authorization status.")
         }
     }
-
+    
     public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         // Handle error appropriately
         FlutterMbBackgroundLocationPlugin.channel?.invokeMethod(
             "location_error", arguments: error.localizedDescription)
     }
-
+    
     public func locationManager(
         _ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]
     ) {
         guard let location = locations.last else { return }
-
+        
         let locationData =
-            [
-                "speed": location.speed,
-                "altitude": location.altitude,
-                "latitude": location.coordinate.latitude,
-                "longitude": location.coordinate.longitude,
-                "accuracy": location.horizontalAccuracy,
-                "bearing": location.course,
-                "time": location.timestamp.timeIntervalSince1970 * 1000,
-                "is_mock": false,
-            ] as [String: Any]
-
+        [
+            "speed": location.speed,
+            "altitude": location.altitude,
+            "latitude": location.coordinate.latitude,
+            "longitude": location.coordinate.longitude,
+            "accuracy": location.horizontalAccuracy,
+            "bearing": location.course,
+            "time": location.timestamp.timeIntervalSince1970 * 1000,
+            "is_mock": false,
+        ] as [String: Any]
+        
         FlutterMbBackgroundLocationPlugin.channel?.invokeMethod("location", arguments: locationData)
         print(
             "LOG: Location updated: \(location.coordinate.latitude), \(location.coordinate.longitude)"
